@@ -1,0 +1,34 @@
+# Environment
+.env
+.env.*
+!.env.example
+*.env
+
+# Secrets
+secrets/
+*.pem
+*.key
+flows_cred.json
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+data/
+backups/
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+
+# Node
+node_modules/
