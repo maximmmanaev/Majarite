@@ -43,3 +43,7 @@
 ## Sprint 3 Completion Docs
 
 - docs/sprints/sprint-3-completion.md
+
+## Sprint 4 Docs
+
+- docs/sprints/sprint-4-telegram-intake-mvp.md
