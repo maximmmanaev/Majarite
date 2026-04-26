@@ -47,3 +47,8 @@
 ## Sprint 4 Docs
 
 - docs/sprints/sprint-4-telegram-intake-mvp.md
+
+## Sprint 4 Telegram Intake Runbooks
+
+- docs/runbooks/telegram-intake-bot.md
+- docs/wiki/processes/telegram-intake-flow.md
