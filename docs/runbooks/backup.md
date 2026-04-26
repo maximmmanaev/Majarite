@@ -1,19 +1,36 @@
-# Runbook: Backup
+# Runbook — Backup
 
-## Goal
+## Purpose
 
-Create recoverable backups for Majarite MVP.
+Backup сохраняет PostgreSQL базы Majarite и Zammad.
 
-## Must Backup
+## Command
 
-- PostgreSQL databases
-- Zammad attachments and volume data
-- Node-RED flows
-- Environment examples
-- Runtime secrets through encrypted external backup only
+bash scripts/backup/backup-postgres.sh
+
+## Output
+
+Backups сохраняются в:
+
+backups/local/postgres
+
+## Files
+
+- majorite-YYYYMMDD-HHMMSS.sql.gz
+- zammad-YYYYMMDD-HHMMSS.sql.gz
+
+## Verify
+
+Проверить список backups:
+
+bash scripts/backup/restore-postgres.sh list
+
+Проверить конкретный backup:
+
+bash scripts/backup/restore-postgres.sh verify backups/local/postgres/majorite-YYYYMMDD-HHMMSS.sql.gz
 
 ## Rules
 
-- Real secrets must not be committed to Git.
-- Backups must be tested with restore drills.
-- Pre-deploy backup is mandatory.
+- backups не коммитить в Git
+- пустой backup считать ошибкой
+- backup выполнять перед deploy

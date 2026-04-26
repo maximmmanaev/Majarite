@@ -1,21 +1,27 @@
-# Runbook: Production Rollback
+# Runbook — Rollback Production
 
-## Goal
+## Purpose
 
-Return Majarite to previous known-good version.
+Rollback возвращает систему к предыдущему Git ref.
 
-## Preconditions
+## Sprint 2 mode
 
-- Previous Git tag exists.
-- Pre-deploy backup exists.
-- Current failure is confirmed.
+В Sprint 2 rollback работает только в safe-plan режиме.
 
-## Steps
+## Command
 
-1. Stop write-heavy services if needed.
-2. Checkout previous Git tag.
-3. Apply previous Docker Compose config.
-4. Restore database only if migration broke data.
-5. Start core stack.
-6. Run smoke tests.
-7. Confirm ticket intake is operational.
+bash scripts/deploy/rollback.sh plan --to HEAD
+
+## Rules
+
+- rollback не должен удалять данные
+- rollback не должен сам восстанавливать базу
+- перед реальным rollback должен быть backup
+- после rollback должен быть smoke-test
+
+## Later
+
+В следующих спринтах можно добавить:
+- app/config rollback
+- DB restore rollback
+- tag-based rollback

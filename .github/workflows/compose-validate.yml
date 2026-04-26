@@ -16,13 +16,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create env file
-        run: cp .env.example .env
-
       - name: Validate compose config
+        env:
+          MAJARITE_PROJECT_NAME: majarite
+          MAJARITE_DATA_DIR: ./data
+          MAJARITE_LOG_DIR: ./logs
         run: |
           docker compose \
-            --env-file .env \
+            --env-file env/dev/.env.example \
             -f infra/compose/compose.base.yml \
             -f infra/compose/compose.core.yml \
             -f infra/compose/compose.prod.yml \
