@@ -27,6 +27,7 @@ jobs:
       - name: Check Python adapter syntax
         run: |
           python3 -m py_compile adapters/email/src/main.py
+          python3 -m py_compile adapters/telegram/src/main.py
 
       - name: Check required files
         run: |
@@ -46,6 +47,10 @@ jobs:
           test -f adapters/email/Dockerfile
           test -f adapters/email/requirements.txt
           test -f tests/fixtures/email/zammad-email-webhook.json
+          test -f adapters/telegram/src/main.py
+          test -f adapters/telegram/Dockerfile
+          test -f adapters/telegram/requirements.txt
+          test -f tests/fixtures/telegram/telegram-message-webhook.json
 
       - name: Check runtime and secret files are not tracked
         run: |
