@@ -1,0 +1,11 @@
+# Local development env override.
+# Copy this file to:
+#   env/dev/.env.local
+#
+# Never commit env/dev/.env.local.
+
+# Zammad API bridge
+ZAMMAD_API_BASE_URL=http://zammad-nginx:8080/api/v1
+ZAMMAD_API_TOKEN=replace-with-local-zammad-api-token
+ZAMMAD_DEFAULT_GROUP=Users
+ZAMMAD_DEFAULT_CUSTOMER_EMAIL=majarite-local-customer@example.com

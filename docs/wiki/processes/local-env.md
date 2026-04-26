@@ -17,7 +17,7 @@ Ignored files:
 
 Create local env file:
 
-cp env/dev/.env.local.example env/dev/.env.local
+cp env/dev/local-env.example env/dev/.env.local
 
 Then edit:
 
