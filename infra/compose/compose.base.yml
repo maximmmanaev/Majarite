@@ -1,15 +1,25 @@
-name: majarite
+name: ${MAJARITE_PROJECT_NAME:-majarite}
+
+x-common-logging: &common-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-common-restart: &common-restart
+  restart: unless-stopped
 
 networks:
   edge_net:
-    driver: bridge
-  core_net:
-    driver: bridge
-  data_net:
+    name: ${MAJARITE_PROJECT_NAME:-majarite}_edge_net
     driver: bridge
 
-volumes:
-  postgres_data:
-  valkey_data:
-  node_red_data:
-  zammad_data:
+  core_net:
+    name: ${MAJARITE_PROJECT_NAME:-majarite}_core_net
+    driver: bridge
+    internal: true
+
+  data_net:
+    name: ${MAJARITE_PROJECT_NAME:-majarite}_data_net
+    driver: bridge
+    internal: true
