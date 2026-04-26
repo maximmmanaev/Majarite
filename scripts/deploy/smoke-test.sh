@@ -209,8 +209,39 @@ LIMIT 1;
   && ok "telegram channel message exists" \
   || fail "telegram channel message missing"
 
+if [ "${ZAMMAD_TICKET_BRIDGE_ENABLED}" = "true" ]; then
+  echo
+  echo "== 19. Ticket bridge check =="
+
+  docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT ticket_ref
+FROM channel_messages
+WHERE channel IN ('email', 'telegram')
+  AND ticket_ref IS NOT NULL
+  AND ticket_ref <> ''
+ORDER BY created_at DESC
+LIMIT 1;
+\"" | grep -Eq "^[0-9]+" \
+    && ok "ticket bridge created linked Zammad ticket" \
+    || fail "ticket bridge did not create linked Zammad ticket"
+
+  docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT event_type
+FROM majorite_events
+WHERE event_type = 'ticket_created'
+ORDER BY created_at DESC
+LIMIT 1;
+\"" | grep -q "ticket_created" \
+    && ok "ticket_created event exists" \
+    || fail "ticket_created event missing"
+else
+  echo
+  echo "== 19. Ticket bridge check =="
+  ok "ticket bridge check skipped because ZAMMAD_TICKET_BRIDGE_ENABLED is not true"
+fi
+
 echo
-echo "== 19. Public port exposure check =="
+echo "== 20. Public port exposure check =="
 docker ps --filter "name=${PROJECT_NAME}-" --format "{{.Names}} {{.Ports}}" | tee /tmp/majarite-ports-check.txt
 
 if grep -E "${PROJECT_NAME}-postgres|${PROJECT_NAME}-valkey" /tmp/majarite-ports-check.txt | grep -qE "0.0.0.0|::"; then

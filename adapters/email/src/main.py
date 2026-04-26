@@ -1,6 +1,9 @@
 import json
 import os
 import uuid
+import urllib.error
+import urllib.request
+import urllib.parse
 from typing import Any
 
 import psycopg
@@ -10,6 +13,18 @@ APP_NAME = "majarite-email-intake-adapter"
 
 DATABASE_URL = os.getenv("MAJORITE_DATABASE_URL", "")
 WEBHOOK_TOKEN = os.getenv("EMAIL_WEBHOOK_TOKEN", "")
+
+ZAMMAD_API_BASE_URL = os.getenv("ZAMMAD_API_BASE_URL", "").rstrip("/")
+ZAMMAD_API_TOKEN = os.getenv("ZAMMAD_API_TOKEN", "")
+ZAMMAD_DEFAULT_GROUP = os.getenv("ZAMMAD_DEFAULT_GROUP", "Users")
+ZAMMAD_DEFAULT_CUSTOMER_EMAIL = os.getenv(
+    "ZAMMAD_DEFAULT_CUSTOMER_EMAIL",
+    "majarite-local-customer@example.com",
+)
+ZAMMAD_TICKET_BRIDGE_ENABLED = os.getenv(
+    "ZAMMAD_TICKET_BRIDGE_ENABLED",
+    "false",
+).lower() in {"1", "true", "yes", "on"}
 
 app = FastAPI(title=APP_NAME)
 
@@ -109,6 +124,108 @@ def normalize_zammad_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def zammad_ticket_bridge_enabled() -> bool:
+    if not ZAMMAD_TICKET_BRIDGE_ENABLED:
+        return False
+
+    if not ZAMMAD_API_TOKEN:
+        return False
+
+    blocked_prefixes = ("change-me", "replace-in-real-server-env")
+    return not ZAMMAD_API_TOKEN.startswith(blocked_prefixes)
+
+
+def zammad_request(method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+    if not ZAMMAD_API_BASE_URL or not ZAMMAD_API_TOKEN:
+        raise RuntimeError("Zammad API is not configured")
+
+    data = None
+    headers = {
+        "Authorization": f"Token token={ZAMMAD_API_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    if payload is not None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    request = urllib.request.Request(
+        f"{ZAMMAD_API_BASE_URL}{path}",
+        data=data,
+        headers=headers,
+        method=method,
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            body = response.read().decode("utf-8")
+            if not body:
+                return {}
+            return json.loads(body)
+    except urllib.error.HTTPError as error:
+        error_body = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Zammad API error {error.code} for {method} {path}: {error_body}"
+        ) from error
+
+
+def find_zammad_customer(email: str) -> dict[str, Any] | None:
+    if not email:
+        return None
+
+    query = urllib.parse.quote(email)
+    result = zammad_request("GET", f"/users/search?query={query}")
+
+    if isinstance(result, list) and result:
+        return result[0]
+
+    return None
+
+
+def create_zammad_customer(email: str, name: str | None = None) -> dict[str, Any]:
+    safe_name = name or email or ZAMMAD_DEFAULT_CUSTOMER_EMAIL
+    parts = safe_name.split(" ", 1)
+
+    payload = {
+        "firstname": parts[0] or "Majarite",
+        "lastname": parts[1] if len(parts) > 1 else "Customer",
+        "email": email,
+        "login": email,
+        "roles": ["Customer"],
+    }
+
+    return zammad_request("POST", "/users", payload)
+
+
+def get_or_create_zammad_customer(email: str, name: str | None = None) -> dict[str, Any]:
+    customer = find_zammad_customer(email)
+    if customer:
+        return customer
+
+    return create_zammad_customer(email, name)
+
+
+def create_zammad_ticket_from_email(normalized: dict[str, Any]) -> dict[str, Any]:
+    sender = normalized.get("sender") or ZAMMAD_DEFAULT_CUSTOMER_EMAIL
+    subject = normalized.get("subject") or "Email request"
+    body = normalized.get("body") or normalized.get("body_text") or subject
+
+    customer = get_or_create_zammad_customer(sender, sender)
+
+    payload = {
+        "title": subject,
+        "group": ZAMMAD_DEFAULT_GROUP,
+        "customer_id": customer["id"],
+        "article": {
+            "subject": subject,
+            "body": body,
+            "type": "note",
+            "internal": False,
+        },
+    }
+
+    return zammad_request("POST", "/tickets", payload)
+
+
 def write_email_event(payload: dict[str, Any]) -> dict[str, Any]:
     if not DATABASE_URL:
         raise RuntimeError("MAJORITE_DATABASE_URL is not configured")
@@ -186,9 +303,64 @@ def write_email_event(payload: dict[str, Any]) -> dict[str, Any]:
                 },
             )
 
+            ticket = None
+
+            if zammad_ticket_bridge_enabled():
+                ticket = create_zammad_ticket_from_email(normalized)
+                ticket_ref = str(ticket.get("number") or ticket.get("id") or "")
+
+                cur.execute(
+                    """
+                    UPDATE channel_messages
+                    SET ticket_ref = %(ticket_ref)s
+                    WHERE message_id = %(message_id)s::uuid;
+                    """,
+                    {
+                        "ticket_ref": ticket_ref,
+                        "message_id": message_id,
+                    },
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO majorite_events (
+                      event_type,
+                      entity_type,
+                      entity_id,
+                      correlation_id,
+                      actor_type,
+                      actor_id,
+                      channel,
+                      payload_json
+                    )
+                    VALUES (
+                      'ticket_created',
+                      'zammad_ticket',
+                      %(ticket_ref)s,
+                      %(correlation_id)s,
+                      'system',
+                      'email-intake-adapter',
+                      'email',
+                      %(payload_json)s::jsonb
+                    );
+                    """,
+                    {
+                        "ticket_ref": ticket_ref,
+                        "correlation_id": normalized["correlation_id"],
+                        "payload_json": json.dumps(
+                            {
+                                "source_message_id": message_id,
+                                "ticket": ticket,
+                                "normalized": normalized,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    },
+                )
+
         conn.commit()
 
-    return {"message_id": message_id, "normalized": normalized}
+    return {"message_id": message_id, "normalized": normalized, "ticket": ticket}
 
 
 @app.post("/webhooks/zammad/email")
