@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  basic-checks:
+    name: Basic repository checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check shell scripts syntax
+        run: |
+          find scripts -name "*.sh" -print0 | xargs -0 -r bash -n
+
+      - name: Check JSON files
+        run: |
+          find . -name "*.json" -not -path "./.git/*" -print0 | xargs -0 -r -I{} python3 -m json.tool "{}" > /dev/null
+
+      - name: Check required files
+        run: |
+          test -f README.md
+          test -f CHANGELOG.md
+          test -f .env.example
+          test -f Makefile
+          test -f docs/product/prd.md
+          test -f docs/product/mvp-scope.md
+          test -f docs/architecture/majarite-system-architecture.md
