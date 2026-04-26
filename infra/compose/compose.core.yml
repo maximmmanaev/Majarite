@@ -25,7 +25,7 @@ services:
       - core_net
     depends_on:
       - node-red
-      - zammad-nginx
+      - zammad-railsserver
 
   majorite-postgres:
     image: ${POSTGRES_IMAGE}
