@@ -77,7 +77,46 @@ docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc 'psql -U "$POSTGRES_USER"
   || fail "majorite_events table missing"
 
 echo
-echo "== 9. Public port exposure check =="
+echo "== 9. Operational event tables =="
+for table in channel_messages clarification_sessions notification_log integration_errors; do
+  docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"SELECT to_regclass('public.${table}');\"" \
+    | grep -q "${table}" \
+    && ok "${table} table exists" \
+    || fail "${table} table missing"
+done
+
+echo
+echo "== 10. Test event write =="
+TEST_ENTITY_ID="smoke-$(date +%s)"
+
+docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -v ON_ERROR_STOP=1 -tAc \"
+INSERT INTO majorite_events (
+  event_type,
+  entity_type,
+  entity_id,
+  correlation_id,
+  actor_type,
+  actor_id,
+  channel,
+  payload_json
+)
+VALUES (
+  'smoke.test',
+  'system',
+  '${TEST_ENTITY_ID}',
+  '${TEST_ENTITY_ID}',
+  'system',
+  'smoke-test',
+  'internal',
+  '{\"source\":\"smoke-test\"}'::jsonb
+);
+SELECT entity_id FROM majorite_events WHERE entity_id = '${TEST_ENTITY_ID}';
+\"" | grep -q "${TEST_ENTITY_ID}" \
+  && ok "test event written to majorite_events" \
+  || fail "test event write failed"
+
+echo
+echo "== 11. Public port exposure check =="
 docker ps --filter "name=${PROJECT_NAME}-" --format "{{.Names}} {{.Ports}}" | tee /tmp/majarite-ports-check.txt
 
 if grep -E "${PROJECT_NAME}-postgres|${PROJECT_NAME}-valkey" /tmp/majarite-ports-check.txt | grep -qE "0.0.0.0|::"; then
