@@ -49,3 +49,30 @@ make prod-up-core ENV_FILE=/opt/majorite/env/prod/.env DATA_DIR=/opt/majorite/da
 - infra/compose/compose.core.yml
 - infra/compose/compose.prod.yml
 - scripts/bootstrap/create-directories.sh
+
+## Critical rule — do not run raw docker compose for core stack
+
+Core Runtime must be started through Makefile commands.
+
+Correct:
+
+make prod-up-core
+make prod-down
+make prod-health
+
+Wrong:
+
+docker compose --env-file env/dev/.env.example -f infra/compose/compose.base.yml -f infra/compose/compose.core.yml -f infra/compose/compose.prod.yml up -d
+
+Reason:
+
+Raw docker compose resolves relative paths such as ./data relative to compose file location. This can create runtime data under:
+
+infra/compose/data
+
+Makefile passes absolute paths:
+
+MAJARITE_DATA_DIR=/home/.../Majarite/data
+MAJARITE_LOG_DIR=/home/.../Majarite/logs
+
+This prevents split runtime state and Node-RED permission errors.
