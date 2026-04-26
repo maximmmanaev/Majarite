@@ -28,8 +28,29 @@ jobs:
         run: |
           test -f README.md
           test -f CHANGELOG.md
-          test -f .env.example
           test -f Makefile
-          test -f docs/product/prd.md
-          test -f docs/product/mvp-scope.md
-          test -f docs/architecture/majarite-system-architecture.md
+          test -f docs/index.md
+          test -f docs/sprints/sprint-1-completion.md
+          test -f docs/sprints/sprint-2-event-store-deploy-safety.md
+          test -f env/dev/.env.example
+          test -f env/prod/.env.example
+          test -f scripts/deploy/smoke-test.sh
+          test -f scripts/deploy/rollback.sh
+          test -f scripts/backup/backup-postgres.sh
+          test -f scripts/backup/restore-postgres.sh
+
+      - name: Check runtime and secret files are not tracked
+        run: |
+          BAD_FILES="$(git ls-files | grep -E '(^data/|^logs/|^backups/|infra/compose/data|(^|/)\.env$|flows_cred\.json$|flows_cred[^/]*\.json$)' | grep -v 'flows_cred.example.json' || true)"
+          if [ -n "$BAD_FILES" ]; then
+            echo "Tracked runtime/secret files found:"
+            echo "$BAD_FILES"
+            exit 1
+          fi
+
+      - name: Check no latest image tags in compose/env
+        run: |
+          if grep -R "latest" infra/compose env --exclude-dir=.git; then
+            echo "Do not use latest image tags"
+            exit 1
+          fi
