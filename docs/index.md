@@ -25,3 +25,7 @@
 - docs/runbooks/backup.md
 - docs/runbooks/restore.md
 - docs/runbooks/rollback-production.md
+
+## Sprint 2 Completion Docs
+
+- docs/sprints/sprint-2-completion.md
