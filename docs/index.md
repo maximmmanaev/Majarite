@@ -14,3 +14,7 @@
 ## Sprint Completion Docs
 
 - docs/sprints/sprint-1-completion.md
+
+## Sprint 2 Docs
+
+- docs/sprints/sprint-2-event-store-deploy-safety.md
