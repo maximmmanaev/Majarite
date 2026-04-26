@@ -64,3 +64,8 @@
 ## Local Runtime Docs
 
 - docs/wiki/processes/local-env.md
+
+## Sprint 5 Ticket Bridge Runbooks
+
+- docs/runbooks/ticket-creation-bridge.md
+- docs/wiki/processes/ticket-creation-bridge-flow.md
