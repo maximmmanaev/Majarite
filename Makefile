@@ -24,6 +24,7 @@ help:
 	@echo "  make prod-logs     - follow core stack logs"
 	@echo "  make prod-health   - show container status and health"
 	@echo "  make prod-ps       - show compose services"
+	@echo "  make smoke-test    - run core runtime smoke tests"
 
 .PHONY: prod-config
 prod-config:
@@ -56,3 +57,8 @@ prod-health:
 	@echo
 	@echo "== Container health states =="
 	@docker ps --filter "name=$(PROJECT_NAME)-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+
+.PHONY: smoke-test
+smoke-test:
+	bash scripts/deploy/smoke-test.sh
