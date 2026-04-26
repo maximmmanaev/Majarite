@@ -15,13 +15,17 @@ Ignored files:
 
 ## Sprint 5 Zammad API token
 
-Create local env file:
+Create local env file from full dev env:
 
-cp env/dev/local-env.example env/dev/.env.local
+cp env/dev/.env.example env/dev/.env.local
 
-Then edit:
+Append local secret template:
 
-env/dev/.env.local
+cat env/dev/local-env.example >> env/dev/.env.local
+
+Edit local env:
+
+nano env/dev/.env.local
 
 Set:
 
@@ -39,3 +43,9 @@ ENV_FILE=env/dev/.env.local make prod-up-core
 and:
 
 ENV_FILE=env/dev/.env.local make smoke-test
+
+## Why not only local-env.example
+
+Docker Compose needs all base variables from env/dev/.env.example.
+
+Therefore env/dev/.env.local must be a full env file, not only a small override.

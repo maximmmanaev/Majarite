@@ -1,6 +1,9 @@
 # Local development env override.
-# Copy this file to:
-#   env/dev/.env.local
+#
+# Correct usage:
+#   cp env/dev/.env.example env/dev/.env.local
+#   cat env/dev/local-env.example >> env/dev/.env.local
+#   nano env/dev/.env.local
 #
 # Never commit env/dev/.env.local.
 
