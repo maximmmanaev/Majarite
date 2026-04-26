@@ -1,0 +1,16 @@
+{
+  "ticket": {
+    "id": "test-ticket-1",
+    "number": "202604260001",
+    "title": "Ошибка входа в ЦУС",
+    "customer_email": "user@example.com"
+  },
+  "article": {
+    "id": "test-article-1",
+    "message_id": "email-message-001",
+    "from": "user@example.com",
+    "subject": "Ошибка входа в ЦУС",
+    "body": "Здравствуйте. Пользователь Иванов Иван не может войти в базу demo. Почта user@example.com.",
+    "attachments": []
+  }
+}

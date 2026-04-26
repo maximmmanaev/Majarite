@@ -34,6 +34,8 @@ prod-config:
 prod-up-core:
 	bash scripts/bootstrap/create-directories.sh
 	$(COMPOSE) up -d
+	@echo "Restarting nginx to refresh Docker DNS upstreams..."
+	@docker restart $(PROJECT_NAME)-nginx >/dev/null 2>&1 || true
 
 .PHONY: prod-down
 prod-down:

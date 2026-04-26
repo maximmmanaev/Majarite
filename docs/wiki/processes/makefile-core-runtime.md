@@ -76,3 +76,13 @@ MAJARITE_DATA_DIR=/home/.../Majarite/data
 MAJARITE_LOG_DIR=/home/.../Majarite/logs
 
 This prevents split runtime state and Node-RED permission errors.
+
+## NGINX restart after core startup
+
+After `make prod-up-core`, NGINX is restarted automatically.
+
+Reason:
+
+When internal containers are recreated, Docker DNS can assign a new IP to services such as `email-adapter`. NGINX may keep old upstream resolution until restart.
+
+This prevents temporary 502 errors after rebuilding adapters.

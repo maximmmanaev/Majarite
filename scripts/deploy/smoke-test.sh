@@ -116,7 +116,54 @@ SELECT entity_id FROM majorite_events WHERE entity_id = '${TEST_ENTITY_ID}';
   || fail "test event write failed"
 
 echo
-echo "== 11. Public port exposure check =="
+echo "== 11. Email adapter health =="
+HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/email-adapter/health")"
+case "$HTTP_CODE" in
+  200)
+    ok "Email adapter health returned ${HTTP_CODE}"
+    ;;
+  *)
+    fail "Email adapter health returned ${HTTP_CODE}"
+    ;;
+esac
+
+echo
+echo "== 12. Email webhook POST =="
+EMAIL_WEBHOOK_RESPONSE="$(curl -s -X POST "${BASE_URL}/webhooks/zammad/email" \
+  -H "Content-Type: application/json" \
+  -H "X-Majarite-Token: change-me-dev-email-webhook-token" \
+  --data-binary @tests/fixtures/email/zammad-email-webhook.json)"
+
+echo "${EMAIL_WEBHOOK_RESPONSE}" | grep -q '"status":"accepted"' \
+  && ok "Email webhook accepted fixture" \
+  || fail "Email webhook did not accept fixture"
+
+echo
+echo "== 13. Email received event exists =="
+docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT event_type
+FROM majorite_events
+WHERE event_type = 'email_received'
+ORDER BY created_at DESC
+LIMIT 1;
+\"" | grep -q "email_received" \
+  && ok "email_received event exists" \
+  || fail "email_received event missing"
+
+echo
+echo "== 14. Email channel message exists =="
+docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT channel
+FROM channel_messages
+WHERE channel = 'email'
+ORDER BY created_at DESC
+LIMIT 1;
+\"" | grep -q "email" \
+  && ok "email channel message exists" \
+  || fail "email channel message missing"
+
+echo
+echo "== 15. Public port exposure check =="
 docker ps --filter "name=${PROJECT_NAME}-" --format "{{.Names}} {{.Ports}}" | tee /tmp/majarite-ports-check.txt
 
 if grep -E "${PROJECT_NAME}-postgres|${PROJECT_NAME}-valkey" /tmp/majarite-ports-check.txt | grep -qE "0.0.0.0|::"; then

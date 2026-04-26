@@ -29,3 +29,13 @@
 ## Sprint 2 Completion Docs
 
 - docs/sprints/sprint-2-completion.md
+
+## Sprint 3 Docs
+
+- docs/sprints/sprint-3-email-intake-mvp.md
+
+## Sprint 3 Email Intake Runbooks
+
+- docs/runbooks/email-intake-zammad.md
+- docs/runbooks/zammad-email-webhook.md
+- docs/wiki/processes/email-intake-flow.md
