@@ -52,3 +52,7 @@
 
 - docs/runbooks/telegram-intake-bot.md
 - docs/wiki/processes/telegram-intake-flow.md
+
+## Sprint 4 Completion Docs
+
+- docs/sprints/sprint-4-completion.md
