@@ -1,1 +1,232 @@
-services: {}
+services:
+  nginx:
+    image: ${NGINX_IMAGE}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-nginx
+    <<: *common-restart
+    logging: *common-logging
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ../nginx/conf.d:/etc/nginx/conf.d:ro
+      - ${MAJARITE_LOG_DIR:-./logs}/nginx:/var/log/nginx
+      - ${MAJARITE_DATA_DIR:-./data}/nginx/cache:/var/cache/nginx
+    networks:
+      - edge_net
+      - core_net
+    depends_on:
+      - node-red
+      - zammad-nginx
+
+  majorite-postgres:
+    image: ${POSTGRES_IMAGE}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-postgres-majorite
+    <<: *common-restart
+    logging: *common-logging
+    environment:
+      POSTGRES_DB: ${MAJORITE_POSTGRES_DB}
+      POSTGRES_USER: ${MAJORITE_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${MAJORITE_POSTGRES_PASSWORD}
+      TZ: ${TZ:-Europe/London}
+    volumes:
+      - ${MAJARITE_DATA_DIR:-./data}/postgres-majorite:/var/lib/postgresql/data
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - data_net
+      - core_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MAJORITE_POSTGRES_USER} -d ${MAJORITE_POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  valkey:
+    image: ${VALKEY_IMAGE}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-valkey
+    <<: *common-restart
+    logging: *common-logging
+    command: ["valkey-server", "--appendonly", "yes"]
+    volumes:
+      - ${MAJARITE_DATA_DIR:-./data}/valkey:/data
+    networks:
+      - core_net
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  node-red:
+    image: ${NODE_RED_IMAGE}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-node-red
+    <<: *common-restart
+    logging: *common-logging
+    environment:
+      TZ: ${TZ:-Europe/London}
+      NODE_RED_CREDENTIAL_SECRET: ${NODE_RED_CREDENTIAL_SECRET}
+    volumes:
+      - ${MAJARITE_DATA_DIR:-./data}/node-red:/data
+    networks:
+      - core_net
+      - data_net
+    depends_on:
+      majorite-postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:1880/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  zammad-postgres:
+    image: ${POSTGRES_IMAGE}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-postgres-zammad
+    <<: *common-restart
+    logging: *common-logging
+    environment:
+      POSTGRES_DB: ${ZAMMAD_POSTGRES_DB}
+      POSTGRES_USER: ${ZAMMAD_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${ZAMMAD_POSTGRES_PASSWORD}
+      TZ: ${TZ:-Europe/London}
+    volumes:
+      - ${MAJARITE_DATA_DIR:-./data}/postgres-zammad:/var/lib/postgresql/data
+    networks:
+      - data_net
+      - core_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ZAMMAD_POSTGRES_USER} -d ${ZAMMAD_POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  zammad-redis:
+    image: ${ZAMMAD_REDIS_IMAGE}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-zammad-redis
+    <<: *common-restart
+    logging: *common-logging
+    volumes:
+      - ${MAJARITE_DATA_DIR:-./data}/zammad-redis:/data
+    networks:
+      - core_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  zammad-memcached:
+    image: ${ZAMMAD_MEMCACHED_IMAGE}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-zammad-memcached
+    <<: *common-restart
+    logging: *common-logging
+    networks:
+      - core_net
+
+  zammad-railsserver:
+    image: ${ZAMMAD_IMAGE_REPO}:${ZAMMAD_VERSION}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-zammad-railsserver
+    <<: *common-restart
+    logging: *common-logging
+    environment:
+      RAILS_ENV: production
+      POSTGRESQL_HOST: zammad-postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_DB: ${ZAMMAD_POSTGRES_DB}
+      POSTGRESQL_USER: ${ZAMMAD_POSTGRES_USER}
+      POSTGRESQL_PASS: ${ZAMMAD_POSTGRES_PASSWORD}
+      REDIS_URL: redis://zammad-redis:6379
+      MEMCACHE_SERVERS: zammad-memcached:11211
+      ELASTICSEARCH_ENABLED: ${ZAMMAD_ELASTICSEARCH_ENABLED:-false}
+      ZAMMAD_FQDN: ${ZAMMAD_FQDN}
+      HTTP_TYPE: ${ZAMMAD_HTTP_TYPE:-http}
+      TZ: ${TZ:-Europe/London}
+    volumes:
+      - ${MAJARITE_DATA_DIR:-./data}/zammad-storage:/opt/zammad/storage
+    networks:
+      - core_net
+      - data_net
+    depends_on:
+      zammad-postgres:
+        condition: service_healthy
+      zammad-redis:
+        condition: service_healthy
+      zammad-memcached:
+        condition: service_started
+    command: ["zammad-railsserver"]
+
+  zammad-scheduler:
+    image: ${ZAMMAD_IMAGE_REPO}:${ZAMMAD_VERSION}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-zammad-scheduler
+    <<: *common-restart
+    logging: *common-logging
+    environment:
+      RAILS_ENV: production
+      POSTGRESQL_HOST: zammad-postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_DB: ${ZAMMAD_POSTGRES_DB}
+      POSTGRESQL_USER: ${ZAMMAD_POSTGRES_USER}
+      POSTGRESQL_PASS: ${ZAMMAD_POSTGRES_PASSWORD}
+      REDIS_URL: redis://zammad-redis:6379
+      MEMCACHE_SERVERS: zammad-memcached:11211
+      ELASTICSEARCH_ENABLED: ${ZAMMAD_ELASTICSEARCH_ENABLED:-false}
+      ZAMMAD_FQDN: ${ZAMMAD_FQDN}
+      HTTP_TYPE: ${ZAMMAD_HTTP_TYPE:-http}
+      TZ: ${TZ:-Europe/London}
+    volumes:
+      - ${MAJARITE_DATA_DIR:-./data}/zammad-storage:/opt/zammad/storage
+    networks:
+      - core_net
+      - data_net
+    depends_on:
+      zammad-railsserver:
+        condition: service_started
+    command: ["zammad-scheduler"]
+
+  zammad-websocket:
+    image: ${ZAMMAD_IMAGE_REPO}:${ZAMMAD_VERSION}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-zammad-websocket
+    <<: *common-restart
+    logging: *common-logging
+    environment:
+      RAILS_ENV: production
+      POSTGRESQL_HOST: zammad-postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_DB: ${ZAMMAD_POSTGRES_DB}
+      POSTGRESQL_USER: ${ZAMMAD_POSTGRES_USER}
+      POSTGRESQL_PASS: ${ZAMMAD_POSTGRES_PASSWORD}
+      REDIS_URL: redis://zammad-redis:6379
+      MEMCACHE_SERVERS: zammad-memcached:11211
+      ELASTICSEARCH_ENABLED: ${ZAMMAD_ELASTICSEARCH_ENABLED:-false}
+      ZAMMAD_FQDN: ${ZAMMAD_FQDN}
+      HTTP_TYPE: ${ZAMMAD_HTTP_TYPE:-http}
+      TZ: ${TZ:-Europe/London}
+    volumes:
+      - ${MAJARITE_DATA_DIR:-./data}/zammad-storage:/opt/zammad/storage
+    networks:
+      - core_net
+      - data_net
+    depends_on:
+      zammad-railsserver:
+        condition: service_started
+    command: ["zammad-websocket"]
+
+  zammad-nginx:
+    image: ${ZAMMAD_IMAGE_REPO}:${ZAMMAD_VERSION}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-zammad-nginx
+    <<: *common-restart
+    logging: *common-logging
+    environment:
+      NGINX_SERVER_NAME: ${ZAMMAD_FQDN}
+      ZAMMAD_RAILSSERVER_HOST: zammad-railsserver
+      ZAMMAD_RAILSSERVER_PORT: 3000
+      ZAMMAD_WEBSOCKET_HOST: zammad-websocket
+      ZAMMAD_WEBSOCKET_PORT: 6042
+    networks:
+      - core_net
+    depends_on:
+      zammad-railsserver:
+        condition: service_started
+      zammad-websocket:
+        condition: service_started
+    command: ["zammad-nginx"]
