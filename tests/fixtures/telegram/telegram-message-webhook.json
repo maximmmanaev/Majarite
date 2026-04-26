@@ -1,0 +1,22 @@
+{
+  "update_id": 100000001,
+  "message": {
+    "message_id": 101,
+    "from": {
+      "id": 555001,
+      "is_bot": false,
+      "first_name": "Ivan",
+      "last_name": "Ivanov",
+      "username": "ivan_support_test"
+    },
+    "chat": {
+      "id": 777001,
+      "first_name": "Ivan",
+      "last_name": "Ivanov",
+      "username": "ivan_support_test",
+      "type": "private"
+    },
+    "date": 1777214400,
+    "text": "Здравствуйте. У пользователя Иванов Иван ошибка входа в базу demo."
+  }
+}
