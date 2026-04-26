@@ -163,7 +163,54 @@ LIMIT 1;
   || fail "email channel message missing"
 
 echo
-echo "== 15. Public port exposure check =="
+echo "== 15. Telegram adapter health =="
+HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/telegram-adapter/health")"
+case "$HTTP_CODE" in
+  200)
+    ok "Telegram adapter health returned ${HTTP_CODE}"
+    ;;
+  *)
+    fail "Telegram adapter health returned ${HTTP_CODE}"
+    ;;
+esac
+
+echo
+echo "== 16. Telegram webhook POST =="
+TELEGRAM_WEBHOOK_RESPONSE="$(curl -s -X POST "${BASE_URL}/webhooks/telegram" \
+  -H "Content-Type: application/json" \
+  -H "X-Majarite-Token: change-me-dev-telegram-webhook-token" \
+  --data-binary @tests/fixtures/telegram/telegram-message-webhook.json)"
+
+echo "${TELEGRAM_WEBHOOK_RESPONSE}" | grep -q '"status":"accepted"' \
+  && ok "Telegram webhook accepted fixture" \
+  || fail "Telegram webhook did not accept fixture"
+
+echo
+echo "== 17. Telegram received event exists =="
+docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT event_type
+FROM majorite_events
+WHERE event_type = 'telegram_message_received'
+ORDER BY created_at DESC
+LIMIT 1;
+\"" | grep -q "telegram_message_received" \
+  && ok "telegram_message_received event exists" \
+  || fail "telegram_message_received event missing"
+
+echo
+echo "== 18. Telegram channel message exists =="
+docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT channel
+FROM channel_messages
+WHERE channel = 'telegram'
+ORDER BY created_at DESC
+LIMIT 1;
+\"" | grep -q "telegram" \
+  && ok "telegram channel message exists" \
+  || fail "telegram channel message missing"
+
+echo
+echo "== 19. Public port exposure check =="
 docker ps --filter "name=${PROJECT_NAME}-" --format "{{.Names}} {{.Ports}}" | tee /tmp/majarite-ports-check.txt
 
 if grep -E "${PROJECT_NAME}-postgres|${PROJECT_NAME}-valkey" /tmp/majarite-ports-check.txt | grep -qE "0.0.0.0|::"; then
