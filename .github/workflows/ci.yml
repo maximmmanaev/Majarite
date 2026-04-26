@@ -24,6 +24,10 @@ jobs:
         run: |
           find . -name "*.json" -not -path "./.git/*" -print0 | xargs -0 -r -I{} python3 -m json.tool "{}" > /dev/null
 
+      - name: Check Python adapter syntax
+        run: |
+          python3 -m py_compile adapters/email/src/main.py
+
       - name: Check required files
         run: |
           test -f README.md
@@ -38,6 +42,10 @@ jobs:
           test -f scripts/deploy/rollback.sh
           test -f scripts/backup/backup-postgres.sh
           test -f scripts/backup/restore-postgres.sh
+          test -f adapters/email/src/main.py
+          test -f adapters/email/Dockerfile
+          test -f adapters/email/requirements.txt
+          test -f tests/fixtures/email/zammad-email-webhook.json
 
       - name: Check runtime and secret files are not tracked
         run: |
