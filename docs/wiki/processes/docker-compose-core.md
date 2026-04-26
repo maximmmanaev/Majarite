@@ -39,3 +39,15 @@ compose.core.yml описывает Sprint 1 Core Runtime.
 - infra/postgres/init/001_majorite_event_store.sql
 - env/dev/.env.example
 - env/prod/.env.example
+
+## Zammad init
+
+Перед запуском runtime-сервисов Zammad выполняется zammad-init.
+
+Причина:
+
+- инициализация базы
+- подготовка storage
+- безопасный первый старт Zammad runtime
+
+Runtime-сервис zammad-railsserver зависит от успешного завершения zammad-init.
