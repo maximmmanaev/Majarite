@@ -21,6 +21,10 @@ ZAMMAD_DEFAULT_CUSTOMER_EMAIL = os.getenv(
     "ZAMMAD_DEFAULT_CUSTOMER_EMAIL",
     "majarite-local-customer@example.com",
 )
+ZAMMAD_TICKET_BRIDGE_ENABLED = os.getenv(
+    "ZAMMAD_TICKET_BRIDGE_ENABLED",
+    "false",
+).lower() in {"1", "true", "yes", "on"}
 
 app = FastAPI(title=APP_NAME)
 
@@ -120,6 +124,17 @@ def normalize_zammad_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def zammad_ticket_bridge_enabled() -> bool:
+    if not ZAMMAD_TICKET_BRIDGE_ENABLED:
+        return False
+
+    if not ZAMMAD_API_TOKEN:
+        return False
+
+    blocked_prefixes = ("change-me", "replace-in-real-server-env")
+    return not ZAMMAD_API_TOKEN.startswith(blocked_prefixes)
+
+
 def zammad_request(method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
     if not ZAMMAD_API_BASE_URL or not ZAMMAD_API_TOKEN:
         raise RuntimeError("Zammad API is not configured")
@@ -203,7 +218,7 @@ def create_zammad_ticket_from_email(normalized: dict[str, Any]) -> dict[str, Any
         "article": {
             "subject": subject,
             "body": body,
-            "type": "email",
+            "type": "note",
             "internal": False,
         },
     }
@@ -288,9 +303,64 @@ def write_email_event(payload: dict[str, Any]) -> dict[str, Any]:
                 },
             )
 
+            ticket = None
+
+            if zammad_ticket_bridge_enabled():
+                ticket = create_zammad_ticket_from_email(normalized)
+                ticket_ref = str(ticket.get("number") or ticket.get("id") or "")
+
+                cur.execute(
+                    """
+                    UPDATE channel_messages
+                    SET ticket_ref = %(ticket_ref)s
+                    WHERE message_id = %(message_id)s::uuid;
+                    """,
+                    {
+                        "ticket_ref": ticket_ref,
+                        "message_id": message_id,
+                    },
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO majorite_events (
+                      event_type,
+                      entity_type,
+                      entity_id,
+                      correlation_id,
+                      actor_type,
+                      actor_id,
+                      channel,
+                      payload_json
+                    )
+                    VALUES (
+                      'ticket_created',
+                      'zammad_ticket',
+                      %(ticket_ref)s,
+                      %(correlation_id)s,
+                      'system',
+                      'email-intake-adapter',
+                      'email',
+                      %(payload_json)s::jsonb
+                    );
+                    """,
+                    {
+                        "ticket_ref": ticket_ref,
+                        "correlation_id": normalized["correlation_id"],
+                        "payload_json": json.dumps(
+                            {
+                                "source_message_id": message_id,
+                                "ticket": ticket,
+                                "normalized": normalized,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    },
+                )
+
         conn.commit()
 
-    return {"message_id": message_id, "normalized": normalized}
+    return {"message_id": message_id, "normalized": normalized, "ticket": ticket}
 
 
 @app.post("/webhooks/zammad/email")
