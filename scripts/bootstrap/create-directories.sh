@@ -25,4 +25,12 @@ mkdir -p \
   "${LOG_DIR}/postgres" \
   "${LOG_DIR}/valkey"
 
+
+# Node-RED official container writes runtime files into /data.
+# It must be writable by UID 1000 inside the container.
+if [ -d "${DATA_DIR}/node-red" ]; then
+  chown -R 1000:1000 "${DATA_DIR}/node-red" 2>/dev/null || true
+  chmod -R u+rwX,g+rwX "${DATA_DIR}/node-red" 2>/dev/null || true
+fi
+
 echo "Directory layout created successfully"
