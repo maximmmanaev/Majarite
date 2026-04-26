@@ -108,7 +108,7 @@ VALUES (
   'system',
   'smoke-test',
   'internal',
-  '{\"source\":\"smoke-test\"}'::jsonb
+  jsonb_build_object('source','smoke-test')
 );
 SELECT entity_id FROM majorite_events WHERE entity_id = '${TEST_ENTITY_ID}';
 \"" | grep -q "${TEST_ENTITY_ID}" \
