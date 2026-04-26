@@ -37,3 +37,7 @@ env/**/.env
 flows_cred*.json
 **/data/
 **/logs/
+
+# Local runtime env files
+env/**/*.local
+env/**/*.secret
