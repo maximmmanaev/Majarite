@@ -37,3 +37,23 @@ Webhook может быть защищен заголовком:
 X-Majarite-Token
 
 Реальный token не хранится в Git.
+
+## Docker Compose
+
+Service name:
+
+email-adapter
+
+Internal port:
+
+8080
+
+Public routes through external NGINX:
+
+- GET /email-adapter/health
+- POST /webhooks/zammad/email
+
+## Runtime rule
+
+email-adapter is internal-only. It is not published directly to the host.
+Only NGINX exposes the webhook route.

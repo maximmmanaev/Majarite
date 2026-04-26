@@ -26,6 +26,7 @@ services:
     depends_on:
       - node-red
       - zammad-railsserver
+      - email-adapter
 
   majorite-postgres:
     image: ${POSTGRES_IMAGE}
@@ -85,6 +86,29 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:1880/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  email-adapter:
+    build:
+      context: ../../adapters/email
+    image: ${EMAIL_ADAPTER_IMAGE}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-email-adapter
+    <<: *common-restart
+    logging: *common-logging
+    environment:
+      MAJORITE_DATABASE_URL: ${MAJORITE_DATABASE_URL}
+      EMAIL_WEBHOOK_TOKEN: ${EMAIL_WEBHOOK_TOKEN}
+      TZ: ${TZ:-Europe/London}
+    networks:
+      - core_net
+      - data_net
+    depends_on:
+      majorite-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)\""]
       interval: 15s
       timeout: 5s
       retries: 20
