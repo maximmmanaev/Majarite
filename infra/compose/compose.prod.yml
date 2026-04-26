@@ -1,1 +1,15 @@
-services: {}
+services:
+  nginx:
+    environment:
+      MAJARITE_ENV: ${MAJARITE_ENV:-prod}
+
+  node-red:
+    environment:
+      NODE_ENV: production
+      MAJARITE_ENV: ${MAJARITE_ENV:-prod}
+
+  majorite-postgres:
+    shm_size: "256mb"
+
+  zammad-postgres:
+    shm_size: "256mb"
