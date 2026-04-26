@@ -29,3 +29,7 @@
 ## Sprint 2 Completion Docs
 
 - docs/sprints/sprint-2-completion.md
+
+## Sprint 3 Docs
+
+- docs/sprints/sprint-3-email-intake-mvp.md
