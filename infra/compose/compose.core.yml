@@ -17,6 +17,7 @@ services:
       - "${HTTP_PORT:-8080}:80"
     volumes:
       - ../nginx/conf.d:/etc/nginx/conf.d:ro
+      - ../nginx/snippets:/etc/nginx/snippets:ro
       - ${MAJARITE_LOG_DIR:-./logs}/nginx:/var/log/nginx
       - ${MAJARITE_DATA_DIR:-./data}/nginx/cache:/var/cache/nginx
     networks:
