@@ -1,0 +1,15 @@
+name: majarite
+
+networks:
+  edge_net:
+    driver: bridge
+  core_net:
+    driver: bridge
+  data_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  valkey_data:
+  node_red_data:
+  zammad_data:

@@ -1,0 +1,29 @@
+name: Compose Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  compose-validate:
+    name: Validate Docker Compose config
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create env file
+        run: cp .env.example .env
+
+      - name: Validate compose config
+        run: |
+          docker compose \
+            --env-file .env \
+            -f infra/compose/compose.base.yml \
+            -f infra/compose/compose.core.yml \
+            -f infra/compose/compose.prod.yml \
+            config

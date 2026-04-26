@@ -1,0 +1,9 @@
+{
+  "name": "majarite-node-red-flows",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node-RED flows for Majarite orchestration",
+  "scripts": {
+    "validate": "node -e \"JSON.parse(require('fs').readFileSync('flows_cred.example.json', 'utf8')); console.log('Node-RED flow placeholder validation OK')\""
+  }
+}
