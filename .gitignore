@@ -32,3 +32,8 @@ venv/
 
 # Node
 node_modules/
+-qxF *.env .gitignore || echo *.env >> .gitignore.env.example
+env/**/.env
+flows_cred*.json
+**/data/
+**/logs/
