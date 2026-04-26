@@ -1,17 +1,32 @@
-# Runbook: Restore
+# Runbook — Restore
 
-## Goal
+## Purpose
 
-Restore Majarite MVP after failure or migration to a clean server.
+Restore описывает безопасную проверку PostgreSQL backups.
 
-## Restore Order
+## Sprint 2 mode
 
-1. Prepare clean Ubuntu server.
-2. Install Docker.
-3. Clone repository.
-4. Restore runtime env and secrets.
-5. Restore PostgreSQL.
-6. Restore volumes.
-7. Start core stack.
-8. Run smoke tests.
-9. Verify sample tickets and events.
+В Sprint 2 restore работает только в safe mode.
+
+Автоматическое восстановление базы запрещено.
+
+## Commands
+
+Показать backups:
+
+bash scripts/backup/restore-postgres.sh list
+
+Проверить backup:
+
+bash scripts/backup/restore-postgres.sh verify backups/local/postgres/majorite-YYYYMMDD-HHMMSS.sql.gz
+
+Показать restore plan:
+
+bash scripts/backup/restore-postgres.sh plan majorite backups/local/postgres/majorite-YYYYMMDD-HHMMSS.sql.gz
+
+## Rules
+
+- destructive restore не выполнять без отдельного review
+- сначала verify
+- затем plan
+- только потом отдельная ручная процедура восстановления

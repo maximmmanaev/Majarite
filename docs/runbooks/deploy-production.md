@@ -1,27 +1,38 @@
-# Runbook: Production Deploy
+# Runbook — Deploy Production
 
-## Goal
+## Purpose
 
-Deploy Majarite production-capable MVP from GitHub repository to Ubuntu server.
+Документ описывает безопасный deploy Majarite Core Runtime.
 
 ## Preconditions
 
-- Ubuntu server is prepared.
-- Docker and Docker Compose are installed.
-- Runtime `.env` exists outside Git.
-- Secrets are stored outside Git.
-- Backup has been created before deploy.
+- working branch чистый
+- Docker установлен
+- env файл создан
+- secrets не лежат в Git
+- backup выполнен перед deploy
 
-## Steps
+## Commands
 
-1. Pull target Git tag or branch.
-2. Validate Docker Compose config.
-3. Run pre-deploy backup.
-4. Start core stack.
-5. Run smoke tests.
-6. Check logs.
-7. Confirm Zammad, Node-RED and PostgreSQL are healthy.
+Проверить compose:
 
-## Rollback
+make prod-config
 
-If smoke tests fail, use `docs/runbooks/rollback-production.md`.
+Запустить core runtime:
+
+make prod-up-core
+
+Проверить runtime:
+
+make smoke-test
+
+Посмотреть статус:
+
+make prod-health
+
+## Rules
+
+- Не запускать raw docker compose.
+- Использовать только Makefile commands.
+- Перед production deploy делать backup.
+- После deploy обязательно запускать smoke-test.
