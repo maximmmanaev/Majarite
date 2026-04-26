@@ -39,3 +39,7 @@
 - docs/runbooks/email-intake-zammad.md
 - docs/runbooks/zammad-email-webhook.md
 - docs/wiki/processes/email-intake-flow.md
+
+## Sprint 3 Completion Docs
+
+- docs/sprints/sprint-3-completion.md
