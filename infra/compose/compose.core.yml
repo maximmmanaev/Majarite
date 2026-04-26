@@ -27,6 +27,7 @@ services:
       - node-red
       - zammad-railsserver
       - email-adapter
+      - telegram-adapter
 
   majorite-postgres:
     image: ${POSTGRES_IMAGE}
@@ -100,6 +101,29 @@ services:
     environment:
       MAJORITE_DATABASE_URL: ${MAJORITE_DATABASE_URL}
       EMAIL_WEBHOOK_TOKEN: ${EMAIL_WEBHOOK_TOKEN}
+      TZ: ${TZ:-Europe/London}
+    networks:
+      - core_net
+      - data_net
+    depends_on:
+      majorite-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  telegram-adapter:
+    build:
+      context: ../../adapters/telegram
+    image: ${TELEGRAM_ADAPTER_IMAGE}
+    container_name: ${MAJARITE_PROJECT_NAME:-majarite}-telegram-adapter
+    <<: *common-restart
+    logging: *common-logging
+    environment:
+      MAJORITE_DATABASE_URL: ${MAJORITE_DATABASE_URL}
+      TELEGRAM_WEBHOOK_TOKEN: ${TELEGRAM_WEBHOOK_TOKEN}
       TZ: ${TZ:-Europe/London}
     networks:
       - core_net
