@@ -4,6 +4,7 @@ import uuid
 import urllib.error
 import urllib.request
 import urllib.parse
+from email.utils import parseaddr
 from typing import Any
 
 import psycopg
@@ -204,6 +205,387 @@ def get_or_create_zammad_customer(email: str, name: str | None = None) -> dict[s
     return create_zammad_customer(email, name)
 
 
+def normalize_email_identity(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    _, parsed_email = parseaddr(str(value))
+    identity = (parsed_email or str(value)).strip().lower()
+
+    if "@" not in identity:
+        return None
+
+    return identity
+
+
+def display_name_from_sender(sender: str | None, fallback_email: str) -> str:
+    if not sender:
+        return fallback_email
+
+    parsed_name, _ = parseaddr(str(sender))
+    parsed_name = parsed_name.strip()
+
+    return parsed_name or fallback_email
+
+
+def write_contact_event(
+    cur: Any,
+    event_type: str,
+    entity_type: str,
+    entity_id: str,
+    correlation_id: str,
+    payload: dict[str, Any],
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO majorite_events (
+          event_type,
+          entity_type,
+          entity_id,
+          correlation_id,
+          actor_type,
+          actor_id,
+          channel,
+          payload_json
+        )
+        VALUES (
+          %(event_type)s,
+          %(entity_type)s,
+          %(entity_id)s,
+          %(correlation_id)s,
+          'system',
+          'email-intake-adapter',
+          'email',
+          %(payload_json)s::jsonb
+        );
+        """,
+        {
+            "event_type": event_type,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "correlation_id": correlation_id,
+            "payload_json": json.dumps(payload, ensure_ascii=False),
+        },
+    )
+
+
+def get_or_create_email_contact(
+    cur: Any,
+    sender: str | None,
+    correlation_id: str,
+) -> dict[str, Any] | None:
+    email_identity = normalize_email_identity(sender)
+
+    if not email_identity:
+        write_contact_event(
+            cur,
+            "contact_lookup_not_found",
+            "contact_identity",
+            "email:unknown",
+            correlation_id,
+            {"reason": "sender_email_missing", "sender": sender},
+        )
+        return None
+
+    write_contact_event(
+        cur,
+        "contact_lookup_started",
+        "contact_identity",
+        f"email:{email_identity}",
+        correlation_id,
+        {"channel": "email", "identity_value": email_identity},
+    )
+
+    cur.execute(
+        """
+        SELECT
+          c.contact_id::text,
+          c.display_name,
+          c.primary_email
+        FROM contact_identities ci
+        JOIN contacts c ON c.contact_id = ci.contact_id
+        WHERE ci.channel = 'email'
+          AND ci.identity_value = %(identity_value)s
+        LIMIT 1;
+        """,
+        {"identity_value": email_identity},
+    )
+
+    row = cur.fetchone()
+
+    if row:
+        contact = {
+            "contact_id": row[0],
+            "display_name": row[1],
+            "primary_email": row[2],
+            "identity_value": email_identity,
+        }
+        write_contact_event(
+            cur,
+            "contact_lookup_matched",
+            "contact",
+            contact["contact_id"],
+            correlation_id,
+            contact,
+        )
+        return contact
+
+    display_name = display_name_from_sender(sender, email_identity)
+
+    cur.execute(
+        """
+        INSERT INTO contacts (
+          display_name,
+          primary_email
+        )
+        VALUES (
+          %(display_name)s,
+          %(primary_email)s
+        )
+        RETURNING contact_id::text;
+        """,
+        {
+            "display_name": display_name,
+            "primary_email": email_identity,
+        },
+    )
+
+    contact_id = cur.fetchone()[0]
+
+    cur.execute(
+        """
+        INSERT INTO contact_identities (
+          contact_id,
+          channel,
+          identity_value,
+          verified
+        )
+        VALUES (
+          %(contact_id)s::uuid,
+          'email',
+          %(identity_value)s,
+          true
+        )
+        ON CONFLICT (channel, identity_value) DO NOTHING;
+        """,
+        {
+            "contact_id": contact_id,
+            "identity_value": email_identity,
+        },
+    )
+
+    contact = {
+        "contact_id": contact_id,
+        "display_name": display_name,
+        "primary_email": email_identity,
+        "identity_value": email_identity,
+    }
+
+    write_contact_event(
+        cur,
+        "contact_created",
+        "contact",
+        contact_id,
+        correlation_id,
+        contact,
+    )
+    write_contact_event(
+        cur,
+        "contact_identity_linked",
+        "contact",
+        contact_id,
+        correlation_id,
+        {"channel": "email", "identity_value": email_identity},
+    )
+
+    return contact
+
+
+def get_single_contact_database(
+    cur: Any,
+    contact_id: str | None,
+    correlation_id: str,
+) -> dict[str, Any] | None:
+    if not contact_id:
+        return None
+
+    cur.execute(
+        """
+        SELECT
+          d.database_id::text,
+          d.name
+        FROM contact_databases cd
+        JOIN cus_databases d ON d.database_id = cd.database_id
+        WHERE cd.contact_id = %(contact_id)s::uuid
+          AND d.active = true
+        ORDER BY cd.is_default DESC, d.name ASC;
+        """,
+        {"contact_id": contact_id},
+    )
+
+    rows = cur.fetchall()
+
+    if len(rows) == 1:
+        database = {"database_id": rows[0][0], "database_name": rows[0][1]}
+        write_contact_event(
+            cur,
+            "database_auto_selected",
+            "cus_database",
+            database["database_id"],
+            correlation_id,
+            database,
+        )
+        return database
+
+    if len(rows) > 1:
+        write_contact_event(
+            cur,
+            "database_selection_required",
+            "contact",
+            contact_id,
+            correlation_id,
+            {"reason": "multiple_databases", "databases_count": len(rows)},
+        )
+    else:
+        write_contact_event(
+            cur,
+            "database_selection_required",
+            "contact",
+            contact_id,
+            correlation_id,
+            {"reason": "no_database"},
+        )
+
+    return None
+
+
+def build_email_ticket_context(
+    normalized: dict[str, Any],
+    contact: dict[str, Any] | None,
+    database: dict[str, Any] | None,
+) -> dict[str, Any]:
+    problem_summary = _first_text(normalized.get("subject"), normalized.get("body"))
+
+    context = {
+        "requester_contact_id": contact.get("contact_id") if contact else None,
+        "requester_name": contact.get("display_name") if contact else normalized.get("sender"),
+        "requester_email": (
+            contact.get("primary_email")
+            if contact
+            else normalize_email_identity(normalized.get("sender"))
+        ),
+        "requester_channel": "email",
+        "database_id": database.get("database_id") if database else None,
+        "database_name": database.get("database_name") if database else None,
+        "affected_user_name": None,
+        "problem_summary": problem_summary,
+    }
+
+    missing_fields = []
+
+    if not (context["requester_contact_id"] or context["requester_name"]):
+        missing_fields.append("requester")
+    if not context["requester_email"]:
+        missing_fields.append("reply_path")
+    if not context["database_name"]:
+        missing_fields.append("database_name")
+    if not context["affected_user_name"]:
+        missing_fields.append("affected_user_name")
+    if not context["problem_summary"]:
+        missing_fields.append("problem_summary")
+
+    context["missing_fields"] = missing_fields
+    context["completeness_status"] = "complete" if not missing_fields else "incomplete"
+
+    return context
+
+
+def write_email_ticket_context_snapshot(
+    cur: Any,
+    message_id: str,
+    normalized: dict[str, Any],
+    contact: dict[str, Any] | None,
+    database: dict[str, Any] | None,
+) -> dict[str, Any]:
+    context = build_email_ticket_context(normalized, contact, database)
+
+    cur.execute(
+        """
+        INSERT INTO ticket_context_snapshots (
+          ticket_ref,
+          channel_message_id,
+          requester_contact_id,
+          requester_name,
+          requester_email,
+          requester_channel,
+          database_id,
+          database_name,
+          affected_user_name,
+          problem_summary,
+          completeness_status,
+          missing_fields,
+          correlation_id,
+          payload_json
+        )
+        VALUES (
+          %(ticket_ref)s,
+          %(channel_message_id)s::uuid,
+          %(requester_contact_id)s::uuid,
+          %(requester_name)s,
+          %(requester_email)s,
+          %(requester_channel)s,
+          %(database_id)s::uuid,
+          %(database_name)s,
+          %(affected_user_name)s,
+          %(problem_summary)s,
+          %(completeness_status)s,
+          %(missing_fields)s::jsonb,
+          %(correlation_id)s,
+          %(payload_json)s::jsonb
+        )
+        RETURNING snapshot_id::text;
+        """,
+        {
+            **context,
+            "ticket_ref": normalized.get("ticket_ref"),
+            "channel_message_id": message_id,
+            "correlation_id": normalized["correlation_id"],
+            "missing_fields": json.dumps(context["missing_fields"], ensure_ascii=False),
+            "payload_json": json.dumps({"context": context}, ensure_ascii=False),
+        },
+    )
+
+    snapshot_id = cur.fetchone()[0]
+    context["snapshot_id"] = snapshot_id
+
+    event_type = (
+        "ticket_context_completed"
+        if context["completeness_status"] == "complete"
+        else "ticket_context_incomplete"
+    )
+
+    write_contact_event(
+        cur,
+        event_type,
+        "ticket_context_snapshot",
+        snapshot_id,
+        normalized["correlation_id"],
+        context,
+    )
+
+    if "affected_user_name" in context["missing_fields"]:
+        write_contact_event(
+            cur,
+            "affected_user_required",
+            "ticket_context_snapshot",
+            snapshot_id,
+            normalized["correlation_id"],
+            {"reason": "affected_user_missing"},
+        )
+
+    return context
+
+
 def create_zammad_ticket_from_email(normalized: dict[str, Any]) -> dict[str, Any]:
     sender = normalized.get("sender") or ZAMMAD_DEFAULT_CUSTOMER_EMAIL
     subject = normalized.get("subject") or "Email request"
@@ -270,6 +652,24 @@ def write_email_event(payload: dict[str, Any]) -> dict[str, Any]:
 
             message_id = cur.fetchone()[0]
 
+            contact = get_or_create_email_contact(
+                cur,
+                normalized.get("sender"),
+                normalized["correlation_id"],
+            )
+            database = get_single_contact_database(
+                cur,
+                contact.get("contact_id") if contact else None,
+                normalized["correlation_id"],
+            )
+            ticket_context = write_email_ticket_context_snapshot(
+                cur,
+                message_id,
+                normalized,
+                contact,
+                database,
+            )
+
             cur.execute(
                 """
                 INSERT INTO majorite_events (
@@ -297,7 +697,11 @@ def write_email_event(payload: dict[str, Any]) -> dict[str, Any]:
                     "message_id": message_id,
                     "correlation_id": normalized["correlation_id"],
                     "payload_json": json.dumps(
-                        {"normalized": normalized},
+                        {
+                            "normalized": normalized,
+                            "contact": contact,
+                            "ticket_context": ticket_context,
+                        },
                         ensure_ascii=False,
                     ),
                 },
