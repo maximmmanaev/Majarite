@@ -171,8 +171,27 @@ LIMIT 1;
   && ok "email channel message exists" \
   || fail "email channel message missing"
 
+
 echo
-echo "== 16. Telegram adapter health =="
+echo "== 16. Email contact resolution =="
+docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT count(*)
+FROM contact_identities
+WHERE channel = 'email';
+\"" | grep -Eq "^[1-9][0-9]*$" \
+  && ok "email contact identity exists" \
+  || fail "email contact identity missing"
+
+docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT count(*)
+FROM ticket_context_snapshots
+WHERE requester_channel = 'email';
+\"" | grep -Eq "^[1-9][0-9]*$" \
+  && ok "email ticket context snapshot exists" \
+  || fail "email ticket context snapshot missing"
+
+echo
+echo "== 17. Telegram adapter health =="
 HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/telegram-adapter/health")"
 case "$HTTP_CODE" in
   200)
@@ -184,7 +203,7 @@ case "$HTTP_CODE" in
 esac
 
 echo
-echo "== 17. Telegram webhook POST =="
+echo "== 18. Telegram webhook POST =="
 TELEGRAM_WEBHOOK_RESPONSE="$(curl -s -X POST "${BASE_URL}/webhooks/telegram" \
   -H "Content-Type: application/json" \
   -H "X-Majarite-Token: change-me-dev-telegram-webhook-token" \
@@ -195,7 +214,7 @@ echo "${TELEGRAM_WEBHOOK_RESPONSE}" | grep -q '"status":"accepted"' \
   || fail "Telegram webhook did not accept fixture"
 
 echo
-echo "== 18. Telegram received event exists =="
+echo "== 19. Telegram received event exists =="
 docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
 SELECT event_type
 FROM majorite_events
@@ -207,7 +226,7 @@ LIMIT 1;
   || fail "telegram_message_received event missing"
 
 echo
-echo "== 19. Telegram channel message exists =="
+echo "== 20. Telegram channel message exists =="
 docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
 SELECT channel
 FROM channel_messages
@@ -220,7 +239,7 @@ LIMIT 1;
 
 if [ "${ZAMMAD_TICKET_BRIDGE_ENABLED:-false}" = "true" ]; then
   echo
-  echo "== 20. Ticket bridge check =="
+  echo "== 21. Ticket bridge check =="
 
   docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
 SELECT ticket_ref
@@ -245,12 +264,12 @@ LIMIT 1;
     || fail "ticket_created event missing"
 else
   echo
-  echo "== 20. Ticket bridge check =="
+  echo "== 21. Ticket bridge check =="
   ok "ticket bridge check skipped because ZAMMAD_TICKET_BRIDGE_ENABLED is not true"
 fi
 
 echo
-echo "== 21. Public port exposure check =="
+echo "== 22. Public port exposure check =="
 docker ps --filter "name=${PROJECT_NAME}-" --format "{{.Names}} {{.Ports}}" | tee /tmp/majarite-ports-check.txt
 
 if grep -E "${PROJECT_NAME}-postgres|${PROJECT_NAME}-valkey" /tmp/majarite-ports-check.txt | grep -qE "0.0.0.0|::"; then
