@@ -237,9 +237,28 @@ LIMIT 1;
   && ok "telegram channel message exists" \
   || fail "telegram channel message missing"
 
+
+echo
+echo "== 21. Telegram contact resolution =="
+docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT count(*)
+FROM contact_identities
+WHERE channel = 'telegram';
+\"" | grep -Eq "^[1-9][0-9]*$" \
+  && ok "telegram contact identity exists" \
+  || fail "telegram contact identity missing"
+
+docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
+SELECT count(*)
+FROM ticket_context_snapshots
+WHERE requester_channel = 'telegram';
+\"" | grep -Eq "^[1-9][0-9]*$" \
+  && ok "telegram ticket context snapshot exists" \
+  || fail "telegram ticket context snapshot missing"
+
 if [ "${ZAMMAD_TICKET_BRIDGE_ENABLED:-false}" = "true" ]; then
   echo
-  echo "== 21. Ticket bridge check =="
+  echo "== 22. Ticket bridge check =="
 
   docker exec "${PROJECT_NAME}-postgres-majorite" sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"
 SELECT ticket_ref
@@ -264,12 +283,12 @@ LIMIT 1;
     || fail "ticket_created event missing"
 else
   echo
-  echo "== 21. Ticket bridge check =="
+  echo "== 22. Ticket bridge check =="
   ok "ticket bridge check skipped because ZAMMAD_TICKET_BRIDGE_ENABLED is not true"
 fi
 
 echo
-echo "== 22. Public port exposure check =="
+echo "== 23. Public port exposure check =="
 docker ps --filter "name=${PROJECT_NAME}-" --format "{{.Names}} {{.Ports}}" | tee /tmp/majarite-ports-check.txt
 
 if grep -E "${PROJECT_NAME}-postgres|${PROJECT_NAME}-valkey" /tmp/majarite-ports-check.txt | grep -qE "0.0.0.0|::"; then
